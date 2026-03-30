@@ -1,0 +1,23 @@
+# --- Python 관련 ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# --- 데이터 및 모델 체크포인트 (이미지에 보이는 파일들) ---
+# 대용량 파일이나 학습 결과물은 깃에 올리지 않는 것이 원칙입니다.
+data/
+*.pt
+*.pth
+*.pkl
+
+# --- 로그 및 결과물 ---
+*.txt
+*.log
+train_log.txt
+
+# --- OS 및 에디터 관련 ---
+.DS_Store
+.vscode/
+.idea/

@@ -21,6 +21,8 @@ from pointnet import PointNetfeat
 
 import KelvinletPhysics as Klp
 
+print("Train.py is running!")
+
 def train_test( save_name, device,
                 epochs = 500,
                 lr = 5e-4, weight_decay = 5e-5,
@@ -29,7 +31,7 @@ def train_test( save_name, device,
                 Kelvinlets = False, w_Kelvinlets = 1 ):
     
     # Preprocess and get the datasets and scaler parameters
-    train_dataset, test_dataset, x_mean, x_std, y_mean, y_std = preprocess( device = device, data_path = 'data', aug = False )
+    train_dataset, test_dataset, x_mean, x_std, y_mean, y_std = preprocess( device = device, data_path = 'data' ) #aug = False 삭제
     x_mean, x_std, y_mean, y_std = [ t.to( device ).float() for t in ( x_mean, x_std, y_mean, y_std ) ]
     
     # Initialize model
@@ -169,12 +171,12 @@ def train_test( save_name, device,
         save_name
     )
 
-"""
 if __name__ == '__main__':
+    
     parser = argparse.ArgumentParser()
     parser.add_argument( "--save_name", type = str, required = True )
     parser.add_argument( "--device", type = str, required = True )
     
     args = parser.parse_args()
     train_test( args.save_name, args.device )
-"""
+
