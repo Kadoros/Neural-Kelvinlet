@@ -2,108 +2,94 @@
 import torch
 import pyvista as pv
 import numpy as np
+import os
 from KelvinHyperPINO import KelvinHyperPINO
 
-
 def visualize_visual_haptics(pos_np, mu_pred_np, mu_gt_np=None):
-    """
-    pos_np: (N, 3) 3D 좌표
-    mu_pred_np: (N, 1) 모델이 예측한 상대적 탄성도
-    mu_gt_np: (N, 1) 정답 탄성도 (비교용, 생략 가능)
-    """
     # 1. PyVista Point Cloud 객체 생성
     cloud = pv.PolyData(pos_np)
 
-    # 2. 예측된 탄성도(mu)를 Point 속성으로 추가
-    cloud["Predicted Elasticity (mu)"] = mu_pred_np.flatten()
+    # 2. 예측된 탄성도(mu) 시각화 최적화 (대비 강조)
+    # 모델 출력 mu가 너무 균일할 경우를 대비해 0~1 사이로 정규화해서 봅니다.
+    mu_min, mu_max = mu_pred_np.min(), mu_pred_np.max()
+    print(f"Pred Mu Range: {mu_min:.6f} ~ {mu_max:.6f}")
+    
+    mu_vis = (mu_pred_np - mu_min) / (mu_max - mu_min + 1e-8)
+    cloud["Predicted Elasticity (mu)"] = mu_vis.flatten()
 
     if mu_gt_np is not None:
         cloud["Ground Truth Elasticity"] = mu_gt_np.flatten()
-
-        # 두 개를 나란히 비교해서 그리기
         p = pv.Plotter(shape=(1, 2), window_size=(1600, 600))
 
         # 왼쪽: 예측값
         p.subplot(0, 0)
-        p.add_mesh(
-            cloud,
-            scalars="Predicted Elasticity (mu)",
-            cmap="jet",
-            point_size=5.0,
-            render_points_as_spheres=True,
-        )
-        p.add_text("PINO Prediction (Visual Haptics)", font_size=12)
+        p.add_mesh(cloud, scalars="Predicted Elasticity (mu)", cmap="jet", point_size=5.0, render_points_as_spheres=True)
+        p.add_text(f"PINO Prediction (Range: {mu_min:.4f}-{mu_max:.4f})", font_size=12)
 
         # 오른쪽: 정답(GT)
         p.subplot(0, 1)
-        p.add_mesh(
-            cloud,
-            scalars="Ground Truth Elasticity",
-            cmap="jet",
-            point_size=5.0,
-            render_points_as_spheres=True,
-        )
+        p.add_mesh(cloud, scalars="Ground Truth Elasticity", cmap="jet", point_size=5.0, render_points_as_spheres=True)
         p.add_text("Ground Truth", font_size=12)
-
     else:
-        # 예측값만 그리기
         p = pv.Plotter()
-        p.add_mesh(
-            cloud,
-            scalars="Predicted Elasticity (mu)",
-            cmap="jet",
-            point_size=5.0,
-            render_points_as_spheres=True,
-        )
+        p.add_mesh(cloud, scalars="Predicted Elasticity (mu)", cmap="jet", point_size=5.0, render_points_as_spheres=True)
         p.add_text("PINO Predicted Relative Elasticity", font_size=14)
 
-    p.link_views()  # 카메라 시점 동기화
+    p.link_views()
     p.show()
-
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 1. 학습된 모델 불러오기
-    print("Loading Trained PINO Model...")
+    # 1. 모델 초기화 및 가중치 로드 (가장 최근 저장된 100 epoch 파일)
     model = KelvinHyperPINO(target_width=128).to(device)
-
-    # 학습이 아직 안 끝났다면 에러가 날 테니, try-except로 처리해둡니다.
-    try:
-        model.load_state_dict(
-            torch.load("kelvin_pino_10ch_best.pth", map_location=device)
-        )
-        model.eval()
-    except FileNotFoundError:
-        print("Model file not found. Please train the model first.")
+    checkpoint_path = "kelvin_pino_epoch_100.pth" # 만약 파일명이 다르면 확인하세요!
+    
+    if not os.path.exists(checkpoint_path):
+        print(f"Error: {checkpoint_path} not found. Check your current directory.")
         return
 
-    # 2. 테스트용 데이터 1개 불러오기
-    print("Loading Test Data...")
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.eval()
+    print(f"Successfully loaded model from {checkpoint_path}")
+
+    # 2. 데이터 로드 (train_pino.py 로직과 동일하게 10채널 구성)
     dataset_path = "data/individual_graspers_linear.pt"
     data = torch.load(dataset_path)
 
-    inputs = data["inputs"]  # (B, N, 10)
-    targets = data["mu_gt"]  # (B, N, 1)
+    # 데이터 구조에 따라 인덱싱 (리스트 형태 대응)
+    raw_inputs = data["inputs"][0]  # (B, N, 7)
+    u_set = data["outputs"][0]      # (B, N, 3)
+    
+    # 10채널 합치기
+    inputs_10ch = torch.cat([raw_inputs, u_set], dim=-1)
+    
+    # mu_gt 데이터가 있는지 확인 (없으면 1로 채운 가짜 데이터 생성)
+    if "mu_gt" in data:
+        targets = data["mu_gt"][0]
+    else:
+        print("Warning: mu_gt not found in dataset. Showing prediction only.")
+        targets = torch.ones((inputs_10ch.shape[0], inputs_10ch.shape[1], 1))
 
-    # 첫 번째 배치(인덱스 0) 샘플만 가져와서 테스트
-    test_input = inputs[0:1].to(device)  # (1, N, 10)
-    test_target = targets[0:1]  # (1, N, 1)
+    # 테스트할 샘플 선택 (0번 배치)
+    idx = 0
+    test_input = inputs_10ch[idx:idx+1].to(device)
+    test_target = targets[idx:idx+1]
 
-    # 3. 모델 추론 (Inference) - PINO의 핵심! 단 한 번의 Forward Pass로 끝!
+    # 3. 모델 추론
     print("Running Inference...")
-    with torch.no_grad():  # 평가할 때는 미분(그래프)을 추적하지 않습니다.
-        u_pred, mu_pred = model(test_input)
+    with torch.no_grad():
+        # PINO 모델 구조에 맞춰 분리해서 넣어줌
+        pos = test_input[:, :, 0:3]
+        u_pred, mu_pred = model(pos, test_input)
 
-    # 4. 시각화를 위해 Numpy로 변환
-    pos = test_input[0, :, 0:3].cpu().numpy()
+    # 4. Numpy 변환 및 시각화
+    pos_np = pos[0].cpu().numpy()
     mu_pred_np = mu_pred[0].cpu().numpy()
     mu_gt_np = test_target[0].numpy()
 
-    # 5. 시각적 촉각(Visual Haptics) 렌더링
     print("Rendering 3D Visual Haptics...")
-    visualize_visual_haptics(pos, mu_pred_np, mu_gt_np)
-
+    visualize_visual_haptics(pos_np, mu_pred_np, mu_gt_np)
 
 if __name__ == "__main__":
     main()

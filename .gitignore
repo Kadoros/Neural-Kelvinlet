@@ -20,4 +20,5 @@ train_log.txt
 # --- OS 및 에디터 관련 ---
 .DS_Store
 .vscode/
-.idea/
+.idea/.git_auth
+.git_auth
