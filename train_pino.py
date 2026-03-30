@@ -7,7 +7,7 @@ from KelvinHyperPINO import KelvinHyperPINO
 from pde_static import compute_static_pde_loss
 
 # [1] 설정 및 텐서보드
-LOG_DIR = "runs/liver_inverse_v3_bias0.7" # 🚀 버전 관리
+LOG_DIR = "runs/liver_inverse_v4_fix_bias" # 🚀 버전 관리
 CHECKPOINT_DIR = "checkpoints"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 writer = SummaryWriter(LOG_DIR)
@@ -33,7 +33,7 @@ loader = DataLoader(TensorDataset(inputs_10ch), batch_size=4, shuffle=True)
 # [3] 모델 및 최적화
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = KelvinHyperPINO().to(device)
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
+optimizer = optim.Adam(model.parameters(), lr=2e-4)
 
 # [4] 하이퍼파라미터 (참교육 모드)
 epochs = 500

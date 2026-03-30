@@ -35,7 +35,8 @@ class KelvinHyperPINO(nn.Module):
         # 🚀 참교육 1: 초기 곡률 부여 (1e-4 -> 1e-2)
         with torch.no_grad():
             torch.nn.init.uniform_(self.param_proj.weight, -1e-2, 1e-2)
-            torch.nn.init.constant_(self.param_proj.bias, -2.63)
+            torch.nn.init.constant_(self.param_proj.bias, 0.0)
+            self.param_proj.bias.data[-1] = -2.63 # logit(0.07) ≈ -2.63, 초기 mu_pred가 약 0.07이 되도록 설정
 
     def forward(self, pos, full_input):
         global_feat = self.hyper_net(full_input)
