@@ -1,37 +1,32 @@
 import torch
 
 def get_gradient(y, x):
-    return torch.autograd.grad(
-        y, x, grad_outputs=torch.ones_like(y), create_graph=True, retain_graph=True
-    )[0]
+    return torch.autograd.grad(y, x, grad_outputs=torch.ones_like(y), 
+                               create_graph=True, retain_graph=True)[0]
 
 def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.45):
-    # 1. Displacement Gradient
+    # 1. Gradients
     grad_ux = get_gradient(u_pred[:, :, 0:1], pos)
     grad_uy = get_gradient(u_pred[:, :, 1:2], pos)
     grad_uz = get_gradient(u_pred[:, :, 2:3], pos)
 
-    # 2. Strain Tensor
+    # 2. Strains
     eps_xx, eps_yy, eps_zz = grad_ux[:, :, 0:1], grad_uy[:, :, 1:2], grad_uz[:, :, 2:3]
     eps_xy = 0.5 * (grad_ux[:, :, 1:2] + grad_uy[:, :, 0:1])
     eps_xz = 0.5 * (grad_ux[:, :, 2:3] + grad_uz[:, :, 0:1])
     eps_yz = 0.5 * (grad_uy[:, :, 2:3] + grad_uz[:, :, 1:2])
-
     tr_eps = eps_xx + eps_yy + eps_zz
 
-    # 3. Lamé parameter (λ) 
+    # 3. Lamé & Stress
     lam_pred = (2.0 * mu_pred * nu) / (1.0 - 2.0 * nu)
-
-    # 4. Stress Tensor (σ)
     sig_xx = 2.0 * mu_pred * eps_xx + lam_pred * tr_eps
     sig_yy = 2.0 * mu_pred * eps_yy + lam_pred * tr_eps
     sig_zz = 2.0 * mu_pred * eps_zz + lam_pred * tr_eps
     sig_xy, sig_xz, sig_yz = 2.0 * mu_pred * eps_xy, 2.0 * mu_pred * eps_xz, 2.0 * mu_pred * eps_yz
 
-    # 5. Divergence of Stress (∇·σ)
-    div_sig_x = get_gradient(sig_xx, pos)[:, :, 0:1] + get_gradient(sig_xy, pos)[:, :, 1:2] + get_gradient(sig_xz, pos)[:, :, 2:3]
-    div_sig_y = get_gradient(sig_xy, pos)[:, :, 0:1] + get_gradient(sig_yy, pos)[:, :, 1:2] + get_gradient(sig_yz, pos)[:, :, 2:3]
-    div_sig_z = get_gradient(sig_xz, pos)[:, :, 0:1] + get_gradient(sig_yz, pos)[:, :, 1:2] + get_gradient(sig_zz, pos)[:, :, 2:3]
+    # 4. Divergence (∇·σ)
+    div_x = get_gradient(sig_xx, pos)[:, :, 0:1] + get_gradient(sig_xy, pos)[:, :, 1:2] + get_gradient(sig_xz, pos)[:, :, 2:3]
+    div_y = get_gradient(sig_xy, pos)[:, :, 0:1] + get_gradient(sig_yy, pos)[:, :, 1:2] + get_gradient(sig_yz, pos)[:, :, 2:3]
+    div_z = get_gradient(sig_xz, pos)[:, :, 0:1] + get_gradient(sig_yz, pos)[:, :, 1:2] + get_gradient(sig_zz, pos)[:, :, 2:3]
 
-    pde_res = torch.cat([div_sig_x, div_sig_y, div_sig_z], dim=-1)
-    return torch.mean(pde_res**2)
+    return torch.mean(div_x**2 + div_y**2 + div_z**2)

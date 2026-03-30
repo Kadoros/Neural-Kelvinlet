@@ -1,94 +1,89 @@
 import torch
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.tensorboard import SummaryWriter 
 import os
 from KelvinHyperPINO import KelvinHyperPINO
 from pde_static import compute_static_pde_loss
 
+# [1] 설정 및 텐서보드
+LOG_DIR = "runs/liver_inverse_v3_bias0.7" # 🚀 버전 관리
 CHECKPOINT_DIR = "checkpoints"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+writer = SummaryWriter(LOG_DIR)
 
 # [2] 데이터 로드
-print("Loading Nonlinear dataset for Inverse Elasticity...")
+print("🚀 Loading dataset...")
+
+# 🚀 경로가 두 군데 중 어디에 있는지 체크합니다.
 dataset_path = "data/nonlinear/nonlinear_graspers_ind.pt" 
 if not os.path.exists(dataset_path):
     dataset_path = "data/nonlinear_graspers_ind.pt" 
 
-data = torch.load(dataset_path)
-raw_inputs = data["inputs"][0]
-u_nonlinear = data["outputs"][0]
+if not os.path.exists(dataset_path):
+    # 만약 둘 다 없으면 현재 폴더의 파일들을 출력해서 확인을 돕습니다.
+    print(f"❌ Error: {dataset_path} 파일을 찾을 수 없습니다!")
+    print("현재 폴더 내 'data' 폴더의 내용:", os.listdir('data') if os.path.exists('data') else "data 폴더 없음")
+    exit()
 
-inputs_10ch = torch.cat([raw_inputs, u_nonlinear], dim=-1)
-dataset = TensorDataset(inputs_10ch)
-loader = DataLoader(dataset, batch_size=4, shuffle=True)
+data = torch.load(dataset_path)
+inputs_10ch = torch.cat([data["inputs"][0], data["outputs"][0]], dim=-1)
+loader = DataLoader(TensorDataset(inputs_10ch), batch_size=4, shuffle=True)
 
 # [3] 모델 및 최적화
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = KelvinHyperPINO(target_width=128).to(device)
-# 🚀 학습률 상향 (5e-4)
-optimizer = optim.Adam(model.parameters(), lr=5e-4)
+model = KelvinHyperPINO().to(device)
+optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
-# [4] 하이퍼파라미터
+# [4] 하이퍼파라미터 (참교육 모드)
 epochs = 500
 SAMPLE_SIZE = 512    
-# 🚀 좌표 스케일 정상화 (1.0): 미분값이 작아지는 현상 방지
-POS_SCALE = 1.0    
+RAMP_UP_EPOCHS = 30
+TARGET_PDE_WEIGHT = 3e5 # ⚡ 채찍질 강화
 
-RAMP_UP_EPOCHS = 100
-# 🚀 최종 목표 가중치 상향: 1e25 (체급 맞추기)
-TARGET_PDE_WEIGHT = 10.0 
-
-print(f"🚀 Starting Inverse PINO training on {device}...")
+print(f"🔥 Training started. View on: tensorboard --logdir={LOG_DIR}")
 
 for epoch in range(epochs):
     model.train()
-    epoch_pde_loss = 0
-    epoch_u_loss = 0
-    
-    if epoch < RAMP_UP_EPOCHS:
-        current_pde_weight = (epoch / RAMP_UP_EPOCHS) * TARGET_PDE_WEIGHT
-    else:
-        current_pde_weight = TARGET_PDE_WEIGHT
-
-    track_mu = (epoch % 10 == 0)
-    all_mu_preds = [] if track_mu else None
+    epoch_pde, epoch_u = 0, 0
+    current_pde_weight = (min(epoch / RAMP_UP_EPOCHS, 1.0)) * TARGET_PDE_WEIGHT
 
     for batch in loader:
         batch_x = batch[0].to(device)
         optimizer.zero_grad()
-
-        N = batch_x.shape[1]
-        indices = torch.randperm(N)[:SAMPLE_SIZE]
         
+        indices = torch.randperm(batch_x.shape[1])[:SAMPLE_SIZE]
         pos_raw = batch_x[:, indices, 0:3].clone().detach().requires_grad_(True)
-        pos = pos_raw / POS_SCALE 
         
-        u_pred, mu_pred = model(pos, batch_x)
+        u_pred, mu_pred = model(pos_raw, batch_x)
 
-        # PDE Loss 계산 (pos_raw 기준)
         loss_pde = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
-
-        u_true_sampled = batch_x[:, indices, 7:10]
-        loss_u = torch.mean((u_pred - u_true_sampled) ** 2)
-        
-        # mu 페널티 제거 (자유로운 역문제 풀이)
+        loss_u = torch.mean((u_pred - batch_x[:, indices, 7:10]) ** 2)
         total_loss = loss_u + (current_pde_weight * loss_pde)
         
         total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) 
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
-        epoch_pde_loss += loss_pde.item()
-        epoch_u_loss += loss_u.item()
-        
-        if track_mu:
-            all_mu_preds.append(mu_pred.detach().cpu())
+        epoch_pde += loss_pde.item()
+        epoch_u += loss_u.item()
 
-    if track_mu:
-        full_mu = torch.cat(all_mu_preds)
-        print(f"\n📊 DEBUG | [전체 mu 분포] Min: {full_mu.min().item():.4f} | Max: {full_mu.max().item():.4f} | Mean: {full_mu.mean().item():.4f}")
+    # 🚀 텐서보드 기록
+    avg_u = epoch_u / len(loader)
+    avg_pde = epoch_pde / len(loader)
+    mu_val = mu_pred.detach().cpu()
+    
+    writer.add_scalar("Loss/U-Loss", avg_u, epoch)
+    writer.add_scalar("Loss/PDE-Loss", avg_pde, epoch)
+    writer.add_scalar("Loss/Weighted-PDE", avg_pde * current_pde_weight, epoch)
+    writer.add_scalar("Mu/Mean", mu_val.mean(), epoch)
+    writer.add_scalar("Mu/Max", mu_val.max(), epoch)
+    writer.add_histogram("Mu/Distribution", mu_val, epoch)
 
-    print(f"Epoch [{epoch}/{epochs}] | PDE-Wt: {current_pde_weight:.1e} | U-L: {epoch_u_loss/len(loader):.6f} | PDE-L: {epoch_pde_loss/len(loader):.2e} | Tot: {total_loss.item():.6f}")
+    if epoch % 10 == 0:
+        print(f"Epoch [{epoch}] Mu-Avg: {mu_val.mean():.4f} | U-L: {avg_u:.6f} | PDE-Wt: {current_pde_weight:.1e}")
 
-final_path = os.path.join(CHECKPOINT_DIR, "pino_inverse_final.pth")
-torch.save(model.state_dict(), final_path)
+    if epoch % 50 == 0:
+        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v2_ep{epoch}.pth")
+
+writer.close()
