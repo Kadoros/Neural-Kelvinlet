@@ -7,7 +7,7 @@ from KelvinHyperPINO import KelvinHyperPINO
 from pde_static import compute_static_pde_loss
 
 # [1] 설정 및 텐서보드
-LOG_DIR = "runs/liver_inverse_v4_fix_bias" # 🚀 버전 관리
+LOG_DIR = "runs/liver_v4_marathon_4096" # 🚀 버전 관리
 CHECKPOINT_DIR = "checkpoints"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 writer = SummaryWriter(LOG_DIR)
@@ -28,16 +28,23 @@ if not os.path.exists(dataset_path):
 
 data = torch.load(dataset_path)
 inputs_10ch = torch.cat([data["inputs"][0], data["outputs"][0]], dim=-1)
-loader = DataLoader(TensorDataset(inputs_10ch), batch_size=4, shuffle=True)
+# loader = DataLoader(TensorDataset(inputs_10ch), batch_size=4, shuffle=True)
+loader = DataLoader(TensorDataset(inputs_10ch), batch_size=8, shuffle=True)
 
 # [3] 모델 및 최적화
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = KelvinHyperPINO().to(device)
-optimizer = optim.Adam(model.parameters(), lr=2e-4)
+# optimizer = optim.Adam(model.parameters(), lr=2e-4)
+optimizer = optim.Adam(model.parameters(), lr=5e-5)
 
 # [4] 하이퍼파라미터 (참교육 모드)
-epochs = 500
-SAMPLE_SIZE = 512    
+# epochs = 500
+# SAMPLE_SIZE = 512    
+# RAMP_UP_EPOCHS = 30
+# TARGET_PDE_WEIGHT = 3e5 # ⚡ 채찍질 강화
+
+epochs = 5000
+SAMPLE_SIZE = 4096    
 RAMP_UP_EPOCHS = 30
 TARGET_PDE_WEIGHT = 3e5 # ⚡ 채찍질 강화
 
@@ -80,10 +87,10 @@ for epoch in range(epochs):
     writer.add_scalar("Mu/Max", mu_val.max(), epoch)
     writer.add_histogram("Mu/Distribution", mu_val, epoch)
 
-    if epoch % 10 == 0:
+    if epoch % 1 == 0:
         print(f"Epoch [{epoch}] Mu-Avg: {mu_val.mean():.4f} | U-L: {avg_u:.6f} | PDE-Wt: {current_pde_weight:.1e}")
 
     if epoch % 50 == 0:
-        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v2_ep{epoch}.pth")
+        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v4_marathon_ep{epoch}.pth")
 
 writer.close()
