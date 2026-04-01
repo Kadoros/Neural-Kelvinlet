@@ -18,7 +18,7 @@ class FCLayer_batch(nn.Module):
     def get_param_size(self):
         return self.weight_size + self.bias_size
 
-class KelvinHyperPINO(nn.Module):
+class HyperPINO(nn.Module):
     def __init__(self, target_width=128):
         super().__init__()
         self.hyper_net = PointNetfeat(global_feat=True)

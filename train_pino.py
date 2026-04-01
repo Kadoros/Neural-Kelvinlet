@@ -3,11 +3,11 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter 
 import os
-from KelvinHyperPINO import KelvinHyperPINO
+from HyperPINO import HyperPINO
 from pde_static import compute_static_pde_loss
 
 # [1] 설정 및 텐서보드
-LOG_DIR = "runs/liver_v4_marathon_4096" # 🚀 버전 관리
+LOG_DIR = "runs/liver_v7_detach_test" 
 CHECKPOINT_DIR = "checkpoints"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 writer = SummaryWriter(LOG_DIR)
@@ -33,7 +33,7 @@ loader = DataLoader(TensorDataset(inputs_10ch), batch_size=8, shuffle=True)
 
 # [3] 모델 및 최적화
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = KelvinHyperPINO().to(device)
+model = HyperPINO().to(device)
 # optimizer = optim.Adam(model.parameters(), lr=2e-4)
 optimizer = optim.Adam(model.parameters(), lr=5e-5)
 
@@ -43,10 +43,10 @@ optimizer = optim.Adam(model.parameters(), lr=5e-5)
 # RAMP_UP_EPOCHS = 30
 # TARGET_PDE_WEIGHT = 3e5 # ⚡ 채찍질 강화
 
-epochs = 5000
-SAMPLE_SIZE = 4096    
-RAMP_UP_EPOCHS = 30
-TARGET_PDE_WEIGHT = 3e5 # ⚡ 채찍질 강화
+epochs = 300
+SAMPLE_SIZE = 512    
+RAMP_UP_EPOCHS = 10
+TARGET_PDE_WEIGHT = 3e3 # ⚡ 채찍질 강화
 
 print(f"🔥 Training started. View on: tensorboard --logdir={LOG_DIR}")
 
@@ -90,7 +90,7 @@ for epoch in range(epochs):
     if epoch % 1 == 0:
         print(f"Epoch [{epoch}] Mu-Avg: {mu_val.mean():.4f} | U-L: {avg_u:.6f} | PDE-Wt: {current_pde_weight:.1e}")
 
-    if epoch % 50 == 0:
-        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v4_marathon_ep{epoch}.pth")
+    if epoch % 10 == 0:  # 50에서 10으로 변경
+        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v7_detach_ep{epoch}.pth")
 
 writer.close()
