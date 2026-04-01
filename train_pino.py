@@ -66,7 +66,23 @@ for epoch in range(epochs):
 
         loss_pde = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
         loss_u = torch.mean((u_pred - batch_x[:, indices, 7:10]) ** 2)
-        total_loss = loss_u + (current_pde_weight * loss_pde)
+        
+        # --------------------------------------------------
+        # 논문 기반 다중 닻 (Organ Palette Regularization)
+        # --------------------------------------------------
+        # 논문 에 명시된 4가지 주요 물성치
+        target_mus = torch.tensor([0.03, 0.34, 0.69, 1.07], device=device)
+        
+        # 각 점의 예측값이 4가지 정답 중 하나에만 가까워도 OK!
+        # (mu_pred: [512, 1] -> target_mus: [4]) -> diffs: [512, 4]
+        diffs = (mu_pred - target_mus) ** 2
+        min_diffs, _ = torch.min(diffs, dim=-1)
+        
+        # 평균값이 너무 튀지 않게 잡아주면서도, 4가지 옵션 중 하나를 선택할 자유를 줌
+        loss_anchor = torch.mean(min_diffs)
+        
+        # 가중치는 1.0~10.0 정도로 조절 (Scale-Invariant 수식이 이미 꼼수를 막고 있으므로)
+        total_loss = loss_u + (current_pde_weight * loss_pde) + (1.0 * loss_anchor)
         
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
