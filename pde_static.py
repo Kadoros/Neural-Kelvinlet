@@ -29,4 +29,16 @@ def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.45):
     div_y = get_gradient(sig_xy, pos)[:, :, 0:1] + get_gradient(sig_yy, pos)[:, :, 1:2] + get_gradient(sig_yz, pos)[:, :, 2:3]
     div_z = get_gradient(sig_xz, pos)[:, :, 0:1] + get_gradient(sig_yz, pos)[:, :, 1:2] + get_gradient(sig_zz, pos)[:, :, 2:3]
 
-    return torch.mean(div_x**2 + div_y**2 + div_z**2)
+    # ---------------------------------------------------------
+    # Scale-Invariant PDE Loss (수학적 꼼수 원천 차단)
+    # ---------------------------------------------------------
+    # 분자: PDE 잔차 (Divergence의 제곱합)
+    pde_residual = div_x**2 + div_y**2 + div_z**2
+    
+    # 분모: 응력(Stress) 텐서의 크기 (Frobenius norm squared)
+    stress_norm = sig_xx**2 + sig_yy**2 + sig_zz**2 + 2.0*(sig_xy**2 + sig_xz**2 + sig_yz**2)
+    
+    # 각 포인트별로 잔차를 응력 크기로 나누어버림 (mu가 작아지면 분모도 작아져서 로스 폭발!)
+    scale_invariant_loss = torch.mean(pde_residual / (stress_norm + 1e-8))
+    
+    return scale_invariant_loss
