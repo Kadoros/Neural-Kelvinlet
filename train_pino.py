@@ -81,7 +81,7 @@ for epoch in range(epochs):
         # 평균값이 너무 튀지 않게 잡아주면서도, 4가지 옵션 중 하나를 선택할 자유를 줌
         loss_anchor = torch.mean(min_diffs)
         
-        # 가중치는 1.0~10.0 정도로 조절 (Scale-Invariant 수식이 이미 꼼수를 막고 있으므로)
+        # 가중치는 1.0~10.0 정도로 조절 
         total_loss = loss_u + (current_pde_weight * loss_pde) + (1.0 * loss_anchor)
         
         total_loss.backward()

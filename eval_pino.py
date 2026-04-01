@@ -3,7 +3,7 @@ import torch
 import pyvista as pv
 import numpy as np
 import os
-from KelvinHyperPINO import KelvinHyperPINO
+from HyperPINO import HyperPINO
 
 def visualize_inverse_results(pos_np, mu_pred_np, u_error_np):
     cloud = pv.PolyData(pos_np)
@@ -31,7 +31,7 @@ def visualize_inverse_results(pos_np, mu_pred_np, u_error_np):
 
 def main():
     device = torch.device("cpu") 
-    model = KelvinHyperPINO(target_width=128).to(device)
+    model = HyperPINO(target_width=128).to(device)
     
     # [1] 가중치 로드
     checkpoint_path = "checkpoints/pino_inverse_epoch_100.pth" 
