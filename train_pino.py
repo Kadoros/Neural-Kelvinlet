@@ -7,7 +7,7 @@ from HyperPINO import HyperPINO
 from pde_static import compute_static_pde_loss
 
 # [1] 설정 및 텐서보드
-LOG_DIR = "runs/liver_v9_Scale_Invariant_PDE_Loss_test" 
+LOG_DIR = "runs/liver_v10_Organ_Palette_Anatomical_Prior"
 CHECKPOINT_DIR = "checkpoints"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 writer = SummaryWriter(LOG_DIR)
@@ -107,6 +107,6 @@ for epoch in range(epochs):
         print(f"Epoch [{epoch}] Mu-Avg: {mu_val.mean():.4f} | U-L: {avg_u:.6f} | PDE-Wt: {current_pde_weight:.1e}")
 
     if epoch % 10 == 0:  # 50에서 10으로 변경
-        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v9_Scale_Invariant_PDE_Loss_ep{epoch}.pth")
+        torch.save(model.state_dict(), f"{CHECKPOINT_DIR}/pino_v10_Organ_Palette_Anatomical_Prior_ep{epoch}.pth")
 
 writer.close()
