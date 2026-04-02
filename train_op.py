@@ -14,17 +14,25 @@ from pde_static import compute_static_pde_loss, get_gradient
 # --- Configuration ---
 CONFIG = {
     "dataset_path": "data/nonlinear_graspers_ind.pt",
-    "log_dir": "runs/liver_pino_v6_decoupled", 
+    "log_dir": "runs/liver_pino_v9_weighted_siren", 
     "checkpoint_dir": "checkpoints",
     "batch_size": 8,
     "epochs": 500,
-    "phase1_epochs": 20,  # 20에포크까지는 u만 학습
+    "phase1_epochs": 30,  # u의 정밀도를 위해 30회 학습
     "sample_size": 1024,
     "pos_scale": 200.0,
     "lr_u": 1e-4,
     "lr_mu": 5e-4,
-    "target_pde_weight": 1e1, # u가 고정된 후에는 큰 가중치가 필요 없음
+    "target_pde_weight": 1e1,
 }
+
+# SIREN 초기화 (Sin 활성화 함수를 쓸 때 필수)
+def siren_init(model):
+    with torch.no_grad():
+        for m in model.modules():
+            if isinstance(m, torch.nn.Linear):
+                num_input = m.weight.size(-1)
+                m.weight.uniform_(-np.sqrt(6 / num_input), np.sqrt(6 / num_input))
 
 def log_3d_vis_to_tensorboard(writer, pos_raw, u_gt, u_pred, mu_pred, epoch):
     pos_np = pos_raw[0].detach().cpu().numpy()
@@ -36,7 +44,7 @@ def log_3d_vis_to_tensorboard(writer, pos_raw, u_gt, u_pred, mu_pred, epoch):
     fig = plt.figure(figsize=(15, 5))
     ax1 = fig.add_subplot(121, projection='3d')
     sc1 = ax1.scatter(pos_np[:,0], pos_np[:,1], pos_np[:,2], c=mu_np, cmap='jet', s=5)
-    ax1.set_title(f"Inferred Mu (Mean: {mu_np.mean():.4f})")
+    ax1.set_title(f"Mu (Mean: {mu_np.mean():.4f})")
     fig.colorbar(sc1, ax=ax1, shrink=0.5)
 
     ax2 = fig.add_subplot(122, projection='3d')
@@ -58,10 +66,7 @@ def main():
     loader = DataLoader(TensorDataset(inputs_10ch), batch_size=CONFIG["batch_size"], shuffle=True)
 
     model = SimplePINO().to(device)
-
-    # 초기 바이어스: exp(-0.7) ~= 0.5 근처에서 시작하도록 설정
-    with torch.no_grad():
-        model.net_mu.trunk.net[-1].bias.fill_(-0.7)
+    siren_init(model) # 초기화 적용
 
     optimizer = optim.Adam([
         {'params': model.net_u.parameters(), 'lr': CONFIG["lr_u"]},
@@ -69,19 +74,16 @@ def main():
     ])
 
     for epoch in range(CONFIG["epochs"]):
-        # --- [단계별 학습 전략 핵심] ---
         if epoch < CONFIG["phase1_epochs"]:
-            # Phase 1: u만 학습 (u_loss 집중)
             for p in model.net_u.parameters(): p.requires_grad = True
             for p in model.net_mu.parameters(): p.requires_grad = False
             pde_weight = 0.0
-            phase_name = "Phase1: Train U"
+            phase_name = "P1:Train_U"
         else:
-            # Phase 2: u 고정, mu만 학습 (물리 법칙 강제 적용)
             for p in model.net_u.parameters(): p.requires_grad = False
             for p in model.net_mu.parameters(): p.requires_grad = True
             pde_weight = CONFIG["target_pde_weight"]
-            phase_name = "Phase2: Infer Mu"
+            phase_name = "P2:Infer_Mu"
 
         model.train()
         epoch_metrics = {"u_scaled": 0.0, "pde_scaled": 0.0, "total": 0.0}
@@ -92,18 +94,21 @@ def main():
 
             indices = torch.randperm(batch_data.shape[1])[:CONFIG["sample_size"]]
             pos_raw = batch_data[:, indices, 0:3].clone().detach().requires_grad_(True)
-            tool_action = batch_data[:, 0, 3:7]
+            # 10ch 구성: coords(0:3), tool_flag(3), tool_disp(4:7), u_gt(7:10)
+            tool_flag = batch_data[:, indices, 3:4] 
+            tool_action = batch_data[:, 0, 3:7] # Branch용 (flag+disp)
             u_gt = batch_data[:, indices, 7:10]
 
             u_pred, mu_pred = model(tool_action, pos_raw / CONFIG["pos_scale"])
 
-            # 1. Displacement Loss (1e4 스케일링 유지)
-            loss_u = torch.mean((u_pred - u_gt) ** 2) * 1e4 
+            # --- [3단계: Weighted MSE 적용] ---
+            # 도구가 당기는 점(flag=1)은 10배 중요하게, 나머지는 1배로 계산
+            loss_weights = 1.0 + (tool_flag * 9.0)
+            loss_u = torch.mean(loss_weights * (u_pred - u_gt) ** 2) * 1e4 
 
-            # 2. PDE Loss (순정 PDE + Mu 정규화)
+            # 2. PDE Loss (Mu 정규화 포함)
             raw_pde = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
-            # mu가 작아져도 로스가 줄지 않게 mu_pred의 크기로 나눔
-            loss_pde = (raw_pde / (torch.mean(mu_pred).detach()**2 + 1e-8)) * 1e11
+            loss_pde = (raw_pde / (torch.mean(mu_pred)**2 + 1e-8)) * 1e11
             
             total_loss = loss_u + pde_weight * loss_pde
 
@@ -115,22 +120,14 @@ def main():
             epoch_metrics["pde_scaled"] += (loss_pde.item() * pde_weight)
             epoch_metrics["total"] += total_loss.item()
             
-        num_batches = len(loader)
-        avg_u = epoch_metrics["u_scaled"] / num_batches
-        avg_pde = epoch_metrics["pde_scaled"] / num_batches
-        avg_total = epoch_metrics["total"] / num_batches
-        
-        writer.add_scalar("Loss/Total", avg_total, epoch)
-        writer.add_scalars("Loss/Split", {"U": avg_u, "PDE": avg_pde}, epoch)
+        avg_u = epoch_metrics["u_scaled"] / len(loader)
+        writer.add_scalar("Loss/Total", epoch_metrics["total"]/len(loader), epoch)
         writer.add_scalar("Mu/Mean_Value", mu_pred.mean().item(), epoch)
 
         if epoch % 1 == 0:
             log_3d_vis_to_tensorboard(writer, pos_raw, u_gt, u_pred, mu_pred, epoch)
 
-        print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | Scaled_U: {avg_u:.2f} | Weighted_PDE: {avg_pde:.2f}")
-
-        if epoch % 50 == 0:
-            torch.save(model.state_dict(), f"{CONFIG['checkpoint_dir']}/pino_v6_ep{epoch}.pth")
+        print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | Scaled_U: {avg_u:.2f}")
 
     writer.close()
 
