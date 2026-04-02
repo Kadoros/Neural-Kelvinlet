@@ -16,10 +16,10 @@ CONFIG = {
     "dataset_path": "data/nonlinear_graspers_ind.pt",
     "log_dir": "runs/liver_pino_v13_optimized", # 경로 버전 관리
     "checkpoint_dir": "checkpoints",
-    "batch_size": 64,
+    "batch_size": 32,
     "epochs": 500,
     "phase1_epochs": 50,
-    "sample_size": 4096,  # 4096 샘플로 PDE 계산 (속도와 안정성 균형)
+    "sample_size": 1024,  # 4096 샘플로 PDE 계산 (속도와 안정성 균형)
     "pos_scale": 200.0,
     "lr_u": 5e-4,
     "lr_mu": 5e-4,
