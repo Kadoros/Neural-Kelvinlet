@@ -14,16 +14,16 @@ from pde_static import compute_static_pde_loss, get_gradient
 # --- Configuration ---
 CONFIG = {
     "dataset_path": "data/nonlinear_graspers_ind.pt",
-    "log_dir": "runs/liver_pino_v13_optimized", # 경로 버전 관리
+    "log_dir": "runs/liver_pino_v14_optimized", # 경로 버전 관리
     "checkpoint_dir": "checkpoints",
     "batch_size": 32,
     "epochs": 500,
     "phase1_epochs": 50,
     "sample_size": 1024,  # 4096 샘플로 PDE 계산 (속도와 안정성 균형)
-    "pos_scale": 200.0,
-    "lr_u": 5e-4,
+    "pos_scale": 1.0,
+    "lr_u": 1e-4,
     "lr_mu": 5e-4,
-    "target_pde_weight": 1,
+    "target_pde_weight": 1e1,
     "vis_interval": 20,    # 시각화는 20회에 한 번 (CPU 병목 방지)
     "save_interval": 100,  # 모델 저장은 100회에 한 번
 }
@@ -129,7 +129,7 @@ def main():
 
             # 3단계: Weighted MSE (도구 접촉부 강조) + 스케일링
             loss_weights = 1.0 + (tool_flag * 9.0)
-            loss_u = torch.mean(loss_weights * (u_pred - u_gt) ** 2) * 1.0
+            loss_u = torch.mean(loss_weights * (u_pred - u_gt) ** 2) * 1e4
 
             # 2단계: PDE Loss (Phase 2일 때만 연산)
             if calc_pde:

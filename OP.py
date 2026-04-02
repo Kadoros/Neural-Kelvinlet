@@ -48,7 +48,7 @@ class SimplePINO(nn.Module):
         self.net_mu = DeepONet(branch_in=4, trunk_in=trunk_in_dim, out_channels=1, is_trunk=True)
 
         # 주파수 밴드 설정 (NeRF 방식)
-        freq_bands = torch.pow(2, torch.linspace(0, 10, enc_dim)) 
+        freq_bands = torch.pow(2, torch.linspace(0, 8, enc_dim)) 
         self.register_buffer("freq_bands", freq_bands)
 
     def fourier_encode(self, x):
