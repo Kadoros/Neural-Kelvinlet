@@ -8,7 +8,7 @@ class SimpleMLP(nn.Module):
         curr_dim = input_dim
         for h_dim in hidden_dims:
             layers.append(nn.Linear(curr_dim, h_dim))
-            layers.append(nn.Tanh())  # PDE 계산을 위해 미분 가능한 Tanh 사용
+            layers.append(nn.Tanh())
             curr_dim = h_dim
         layers.append(nn.Linear(curr_dim, output_dim))
         self.net = nn.Sequential(*layers)
@@ -21,34 +21,27 @@ class DeepONet(nn.Module):
         super().__init__()
         self.latent_dim = latent_dim
         self.out_channels = out_channels
-        
-        # Branch: 툴 액션(4ch) 처리
         self.branch = SimpleMLP(branch_in, latent_dim * out_channels)
-        # Trunk: 좌표(3ch) 처리
         self.trunk = SimpleMLP(trunk_in, latent_dim * out_channels)
 
     def forward(self, cond, pos):
-        B = cond.shape[0]
-        N = pos.shape[1]
-
-        # Branch output: (B, out, latent)
-        # Trunk output: (B, N, out, latent)
+        B, N = cond.shape[0], pos.shape[1]
         b_out = self.branch(cond).view(B, 1, self.out_channels, self.latent_dim)
         t_out = self.trunk(pos).view(B, N, self.out_channels, self.latent_dim)
-
-        # 채널별 내적을 통한 결과 생성
         return torch.sum(b_out * t_out, dim=-1)
 
 class SimplePINO(nn.Module):
     def __init__(self):
         super().__init__()
-        # 변위(u) 예측: 3채널 출력
         self.net_u = DeepONet(branch_in=4, trunk_in=3, out_channels=3)
-        # 강성(mu) 예측: 1채널 출력
         self.net_mu = DeepONet(branch_in=4, trunk_in=3, out_channels=1)
 
     def forward(self, tool_action, coords):
         u_pred = self.net_u(tool_action, coords)
-        mu_pred = self.net_mu(tool_action, coords)
-        mu_pred = torch.nn.functional.softplus(mu_raw) + 0.01
+    
+        mu_raw = self.net_mu(tool_action, coords)
+        # mu = exp(log_mu) 방식으로 예측. 
+        # 모델이 -1.0을 뱉으면 mu는 0.36, -3.0을 뱉으면 0.05가 됨.
+        # 자연스럽게 양수 범위를 탐색하며 0으로 완전히 죽지 않음.
+        mu_pred = torch.exp(mu_raw) 
         return u_pred, mu_pred
