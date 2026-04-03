@@ -15,10 +15,10 @@ CONFIG = {
     "log_dir": "runs/linear_v7",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
-    "lr_mu": 1e-5,  
+    "lr_mu": 2e-5,  
     "sample_size": 1024,
     "pde_weight": 1e1,         # Phase 1에서 혹시 쓰일 기본값 (현재는 0.0으로 덮어씌워짐)
-    "target_pde_weight": 1e2,  # Phase 2에서 사용할 실제 PDE 가중치
+    "target_pde_weight": 5e2,  # Phase 2에서 사용할 실제 PDE 가중치
     "batch_size": 64,
     "epochs": 2200,
     "phase1_epochs": 30,
