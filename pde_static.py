@@ -8,7 +8,7 @@ def get_gradient(y, x):
         retain_graph=True
     )[0]
 
-def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.45):
+def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.3):
     # 1. Gradients (변위의 공간 미분)
     grad_ux = get_gradient(u_pred[:, :, 0:1], pos)
     grad_uy = get_gradient(u_pred[:, :, 1:2], pos)
@@ -33,4 +33,7 @@ def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.45):
     div_y = get_gradient(sig_xy, pos)[:, :, 0:1] + get_gradient(sig_yy, pos)[:, :, 1:2] + get_gradient(sig_yz, pos)[:, :, 2:3]
     div_z = get_gradient(sig_xz, pos)[:, :, 0:1] + get_gradient(sig_yz, pos)[:, :, 1:2] + get_gradient(sig_zz, pos)[:, :, 2:3]
 
-    return torch.mean(div_x**2 + div_y**2 + div_z**2)
+    res = torch.mean(div_x**2 + div_y**2 + div_z**2)
+    
+    mu_scale = torch.mean(mu_pred**2) + 0.1 
+    return res / mu_scale

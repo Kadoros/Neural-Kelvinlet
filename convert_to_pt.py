@@ -5,13 +5,13 @@ import glob
 import numpy as np
 from tqdm import tqdm
 
-# [1] 경로 설정: 비선형 데이터셋 타겟
-data_dir = "/home/cvmlserver5/Hyeon/dataset/FEM-simulations/nonlinear_ind"
+# [1] 경로 설정: 선형 데이터셋 타겟
+data_dir = "/home/cvmlserver5/Hyeon/dataset/FEM-simulations/linear_ind"
 output_dir = "data"
 os.makedirs(output_dir, exist_ok=True)
 
 vtk_files = glob.glob(os.path.join(data_dir, "*.vtk"))
-print(f"🚀 Converting {len(vtk_files)} Nonlinear files into 10-channel format...")
+print(f"🚀 Converting {len(vtk_files)} Linear files into 10-channel format...")
 
 all_inputs = []
 all_outputs = []

@@ -55,7 +55,7 @@ class PointNetfeat(nn.Module):
     def __init__(self, global_feat = False, feature_transform = True):
         super(PointNetfeat, self).__init__()
         #self.stn = STN3d()
-        self.conv1 = torch.nn.Conv1d(10, 64, 1)
+        self.conv1 = torch.nn.Conv1d(7, 64, 1)
         self.conv2 = torch.nn.Conv1d(64, 128, 1)
         self.conv3 = torch.nn.Conv1d(128, 1024, 1)
         self.global_feat = global_feat

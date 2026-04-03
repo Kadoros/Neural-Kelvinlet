@@ -13,8 +13,8 @@ from pde_static import compute_static_pde_loss, get_gradient
 
 # --- Configuration ---
 CONFIG = {
-    "dataset_path": "data/nonlinear_graspers_ind.pt",
-    "log_dir": "runs/liver_pino_v14_optimized", # 경로 버전 관리
+    "dataset_path": "data/individual_graspers_linear.pt",
+    "log_dir": "runs/linear_v1", # 경로 버전 관리
     "checkpoint_dir": "checkpoints",
     "batch_size": 32,
     "epochs": 500,
