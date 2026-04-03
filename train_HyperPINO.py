@@ -12,15 +12,15 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v6",
+    "log_dir": "runs/linear_v7",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
-    "lr_mu": 5e-5,  
+    "lr_mu": 1e-5,  
     "sample_size": 1024,
     "pde_weight": 1e1,         # Phase 1에서 혹시 쓰일 기본값 (현재는 0.0으로 덮어씌워짐)
-    "target_pde_weight": 1e1,  # Phase 2에서 사용할 실제 PDE 가중치
+    "target_pde_weight": 1e2,  # Phase 2에서 사용할 실제 PDE 가중치
     "batch_size": 64,
-    "epochs": 200,
+    "epochs": 2200,
     "phase1_epochs": 30,
     "vis_interval": 10,
     "save_interval": 20
@@ -141,7 +141,7 @@ def main():
             total_loss.backward()
             
             if calc_pde:
-                torch.nn.utils.clip_grad_norm_(mu_params, max_norm=0.1) 
+                torch.nn.utils.clip_grad_norm_(mu_params, max_norm=0.05) 
 
             active_optimizer.step()
 
@@ -169,7 +169,7 @@ def main():
               f"U_MSE: {avg_u:.4e} | Scaled_PDE: {avg_pde:.4e} | Reg: {avg_reg:.4e}")
 
         if epoch % CONFIG["save_interval"] == 0:
-            torch.save(model.state_dict(), f"{CONFIG['checkpoint_dir']}/pino_v6_ep{epoch}.pth")
+            torch.save(model.state_dict(), f"{CONFIG['checkpoint_dir']}/pino_v7_ep{epoch}.pth")
 
     writer.close()
 
