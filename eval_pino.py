@@ -34,7 +34,7 @@ def main():
     model = HyperPINO(target_width=128).to(device)
     
     # [1] 가중치 로드
-    checkpoint_path = "checkpoints/pino_v10_epoch_100.pth" 
+    checkpoint_path = "checkpoints/pino_v10_epoch_140.pth" 
     if not os.path.exists(checkpoint_path):
         print(f"❌ Error: {checkpoint_path} 가 없습니다.")
         return
