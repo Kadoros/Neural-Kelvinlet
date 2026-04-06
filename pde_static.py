@@ -33,6 +33,6 @@ def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.3):
     div_y = get_gradient(sig_xy, pos)[:, :, 0:1] + get_gradient(sig_yy, pos)[:, :, 1:2] + get_gradient(sig_yz, pos)[:, :, 2:3]
     div_z = get_gradient(sig_xz, pos)[:, :, 0:1] + get_gradient(sig_yz, pos)[:, :, 1:2] + get_gradient(sig_zz, pos)[:, :, 2:3]
 
-    res = torch.mean(div_x**2 + div_y**2 + div_z**2)
+    pde_residual = torch.mean(div_x**2 + div_y**2 + div_z**2)
     
-    return torch.log(1.0 + res)
+    return pde_residual
