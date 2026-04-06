@@ -7,17 +7,17 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from HyperPINO import HyperPINO
-from energy_static import compute_energy_loss
+from pde_static import compute_static_pde_loss
 from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v9_energy",
+    "log_dir": "runs/linear_v12_log_scale",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
-    "lr_mu": 1e-4,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
+    "lr_mu": 5e-4,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
     "sample_size": 1024,
-    "target_energy_weight": 1.0, 
+    "target_energy_weight": 1e2, 
     "batch_size": 64,
     "epochs": 400,
     "phase1_epochs": 30,
@@ -46,11 +46,11 @@ def main():
         if epoch < CONFIG["phase1_epochs"]:
             for p in u_params: p.requires_grad = True
             for p in mu_params: p.requires_grad = False
-            physics_weight, calc_phys = 0.0, False
+            physics_weight, calc_phys = 1e-2, False
             active_optimizer = optimizer_u
             phase_name = "P1:Train_U "
         else:
-            for p in u_params: p.requires_grad = True
+            for p in u_params: p.requires_grad = False
             for p in mu_params: p.requires_grad = True
             calc_phys = True
             progress = min(1.0, (epoch - CONFIG["phase1_epochs"]) / 50.0) 
@@ -78,10 +78,10 @@ def main():
             loss_u = F.mse_loss(u_pred, u_gt)
 
             if calc_phys:
-                loss_phys_raw = compute_energy_loss(pos_raw, u_pred, mu_pred)
+                loss_phys_raw = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
                 # 붕괴 방지용 앵커 (평균 1.0 유지)
-                loss_anchor = torch.mean((torch.mean(mu_pred) - 1.2)**2) * 1.0
-                loss_phys = loss_phys_raw + loss_anchor
+               
+                loss_phys = loss_phys_raw
             else:
                 loss_phys = torch.tensor(0.0).to(device)
 
@@ -104,6 +104,12 @@ def main():
         
         writer.add_scalars("Loss/Split", {"U_MSE": avg_u, "Phys_Energy": avg_phys}, epoch)
         writer.add_scalar("Mu/Mean", mu_pred.mean().item(), epoch)
+
+        #  [추가] Mu 분포 히스토그램 및 통계
+        mu_val = mu_pred.detach().cpu() # GPU 메모리 해제 및 CPU 복사
+        writer.add_histogram("Mu/Distribution", mu_val, epoch) # 히스토그램 추가
+        writer.add_scalar("Mu/Max", mu_val.max().item(), epoch) # 최대값 추적
+        writer.add_scalar("Mu/Min", mu_val.min().item(), epoch) # 최소값 추적
 
         if epoch % CONFIG["vis_interval"] == 0:
             log_3d_vis_to_tensorboard(writer, pos_raw, u_gt, u_pred, mu_pred, epoch)
