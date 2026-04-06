@@ -17,7 +17,7 @@ CONFIG = {
     "lr_u": 5e-4,
     "lr_mu": 1e-5,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
     "sample_size": 1024,
-    "target_energy_weight": 1e4, 
+    "target_energy_weight": 1e2, 
     "batch_size": 64,
     "epochs": 400,
     "phase1_epochs": 30,

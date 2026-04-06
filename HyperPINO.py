@@ -88,7 +88,7 @@ class HyperPINO(nn.Module):
         mu_raw = self.mu_layers[-1](x_mu, params_mu_all[:, mu_offsets[-2]:mu_offsets[-1]])
         
         
-        mu_pred = 0.5 + torch.sigmoid(mu_raw) * 1.0 
+        mu_pred = 0.3 + torch.sigmoid(mu_raw) * 1.0 
         
         # 2. 강제 평균 정규화 (1.0 고정)
         # 배치 내 모든 점의 평균이 정확히 1.0이 되게 만듭니다.
