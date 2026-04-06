@@ -12,12 +12,12 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v14_more_pde_loss",
+    "log_dir": "runs/linear_v20",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
-    "lr_mu": 1e-3,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
+    "lr_mu": 1e-5,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
     "sample_size": 1024,
-    "target_energy_weight": 5e8, 
+    "target_energy_weight": 1e4, 
     "batch_size": 64,
     "epochs": 400,
     "phase1_epochs": 30,
@@ -78,18 +78,23 @@ def main():
             loss_u = F.mse_loss(u_pred, u_gt)
 
             if calc_phys:
-                loss_phys_raw = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
-                # 붕괴 방지용 앵커 (평균 1.0 유지)
-               
-                loss_phys = loss_phys_raw
+                # 1. 누락된 PDE Loss 계산 함수 호출!
+                loss_phys = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
+                
+                loss_var = 1e-3 / (torch.std(mu_pred) + 1e-4) 
+    
+                # 2. total_loss 계산 (덮어쓰지 않도록 if-else 구조로 분리)
+                total_loss = loss_u + (physics_weight * loss_phys) + loss_var
             else:
                 loss_phys = torch.tensor(0.0).to(device)
+                total_loss = loss_u + (physics_weight * loss_phys)
 
-            total_loss = loss_u + (physics_weight * loss_phys)
+            # 여기 있던 total_loss = ... 코드는 삭제합니다.
+            
             total_loss.backward()
             
             if calc_phys:
-                torch.nn.utils.clip_grad_norm_(mu_params, max_norm=0.1) 
+                torch.nn.utils.clip_grad_norm_(mu_params, max_norm=0.01)
 
             active_optimizer.step()
 
@@ -114,6 +119,33 @@ def main():
         if epoch % CONFIG["vis_interval"] == 0:
             log_3d_vis_to_tensorboard(writer, pos_raw, u_gt, u_pred, mu_pred, epoch)
             print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | U_MSE: {avg_u:.4e}")
+
+        if epoch % CONFIG["save_interval"] == 0 or epoch == CONFIG["epochs"] - 1:
+            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v20_{epoch:03d}.pth")
+            
+            # 저장할 데이터 구성
+            save_dict = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_u_state_dict': optimizer_u.state_dict(),
+                'optimizer_mu_state_dict': optimizer_mu.state_dict(),
+                'loss': total_loss.item(),
+                'phase': phase_name
+            }
+            
+            torch.save(save_dict, checkpoint_path)
+            print(f"--- Checkpoint saved: {checkpoint_path} ---")
+
+        # 2. [선택 사항] Phase 1이 끝나는 시점에 별도 저장 (U 학습 완료 시점)
+        if epoch == CONFIG["phase1_epochs"] - 1:
+            p1_path = os.path.join(CONFIG["checkpoint_dir"], "model_phase1_final.pth")
+            torch.save(model.state_dict(), p1_path)
+            print(f"*** Phase 1 Complete. Model saved to {p1_path} ***")
+
+    # 3. 최종 학습 종료 후 저장
+    final_path = os.path.join(CONFIG["checkpoint_dir"], "model_final.pth")
+    torch.save(model.state_dict(), final_path)
+    print(f"Training finished. Final model saved to {final_path}")
 
     writer.close()
 

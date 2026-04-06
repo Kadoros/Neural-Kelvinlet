@@ -20,7 +20,7 @@ class FCLayer_batch(nn.Module):
         return self.weight_size + self.bias_size
 
 class HyperPINO(nn.Module):
-    def __init__(self, target_width=128, freq=5.0): # freq를 5.0으로 낮춰 고주파 노이즈 억제
+    def __init__(self, target_width=128, freq=10.0): # freq를 5.0으로 낮춰 고주파 노이즈 억제
         super().__init__()
         self.hyper_net_u = PointNetfeat(global_feat=True)
         self.hyper_net_mu = PointNetfeat(global_feat=True)
@@ -88,9 +88,11 @@ class HyperPINO(nn.Module):
         mu_raw = self.mu_layers[-1](x_mu, params_mu_all[:, mu_offsets[-2]:mu_offsets[-1]])
         
         
-        mu_pred = torch.exp(mu_raw)
-    
-        mu_avg = torch.mean(mu_pred, dim=1, keepdim=True) + 1e-6
+        mu_pred = 0.5 + torch.sigmoid(mu_raw) * 1.0 
+        
+        # 2. 강제 평균 정규화 (1.0 고정)
+        # 배치 내 모든 점의 평균이 정확히 1.0이 되게 만듭니다.
+        mu_avg = torch.mean(mu_pred, dim=1, keepdim=True) + 1e-8
         mu_pred = mu_pred / mu_avg 
-    
+        
         return u_pred, mu_pred
