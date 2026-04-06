@@ -34,5 +34,6 @@ def compute_static_pde_loss(pos, u_pred, mu_pred, nu=0.3):
     div_z = get_gradient(sig_xz, pos)[:, :, 0:1] + get_gradient(sig_yz, pos)[:, :, 1:2] + get_gradient(sig_zz, pos)[:, :, 2:3]
 
     pde_residual = torch.mean(div_x**2 + div_y**2 + div_z**2)
-    
+    # 극단적인 아웃라이어에 의해 로스가 폭발하는 것을 방지
+    pde_residual = torch.clamp(pde_residual, max=100.0) 
     return pde_residual

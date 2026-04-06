@@ -80,15 +80,19 @@ def main():
             if calc_phys:
                 loss_phys = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
                 
+                # 1. 평균을 1.0 근처로 유지하도록 유도 (Soft Penalty)
+                mean_mu = torch.mean(mu_pred)
+                loss_mean = F.mse_loss(mean_mu, torch.tensor(1.0).to(device)) * 5.0
+                
+                # 2. 분산 확보 (Hinge Loss 완화)
                 std_mu = torch.std(mu_pred, dim=1).mean()
+                target_std = 0.2  # 처음부터 0.4로 찢지 말고 타겟을 조금 낮춥니다.
                 
-                # [핵심 수정] Hinge Loss 도입 (통곡의 벽)
-                target_std = 0.4  # Mu의 최소 보장 표준편차 (이 값이 클수록 강제로 더 찢어놓음)
-                
-                # std_mu가 target_std(0.4)보다 작아지면 페널티 폭발, 크면 페널티 0
-                loss_var = F.relu(target_std - std_mu) * 10.0 # 10.0은 무조건 PDE 로스를 이길 만큼의 강력한 철퇴
+                # 가중치를 10.0에서 1.0 정도로 낮추거나, progress에 비례하게 만듭니다.
+                loss_var = F.relu(target_std - std_mu) * 1.0 * progress 
     
-                total_loss = loss_u + (physics_weight * loss_phys) + loss_var
+                # 최종 Loss 조합
+                total_loss = loss_u + (physics_weight * loss_phys) + loss_var + loss_mean
             else:
                 loss_phys = torch.tensor(0.0).to(device)
                 total_loss = loss_u + (physics_weight * loss_phys)
