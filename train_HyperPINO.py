@@ -12,12 +12,12 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v13_normalized_mu",
+    "log_dir": "runs/linear_v14_more_pde_loss",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
-    "lr_mu": 1e-4,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
+    "lr_mu": 1e-3,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
     "sample_size": 1024,
-    "target_energy_weight": 1e3, 
+    "target_energy_weight": 5e8, 
     "batch_size": 64,
     "epochs": 400,
     "phase1_epochs": 30,
