@@ -12,7 +12,7 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v20",
+    "log_dir": "runs/linear_v21",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
     "lr_mu": 1e-5,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
@@ -81,9 +81,9 @@ def main():
                 # 1. 누락된 PDE Loss 계산 함수 호출!
                 loss_phys = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
                 
-                loss_var = 1e-3 / (torch.std(mu_pred) + 1e-4) 
+                std_mu = torch.std(mu_pred, dim=1).mean()
+                loss_var = -0.1 * std_mu  # -0.1은 상황에 따라 -0.5나 -1.0으로 키우셔도 됩니다.
     
-                # 2. total_loss 계산 (덮어쓰지 않도록 if-else 구조로 분리)
                 total_loss = loss_u + (physics_weight * loss_phys) + loss_var
             else:
                 loss_phys = torch.tensor(0.0).to(device)
@@ -121,7 +121,7 @@ def main():
             print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | U_MSE: {avg_u:.4e}")
 
         if epoch % CONFIG["save_interval"] == 0 or epoch == CONFIG["epochs"] - 1:
-            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v20_{epoch:03d}.pth")
+            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v21_{epoch:03d}.pth")
             
             # 저장할 데이터 구성
             save_dict = {
