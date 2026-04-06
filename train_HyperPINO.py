@@ -12,12 +12,12 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v21",
+    "log_dir": "runs/linear_v22",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
     "lr_mu": 1e-5,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
     "sample_size": 1024,
-    "target_energy_weight": 1e2, 
+    "target_energy_weight": 20.0,  
     "batch_size": 64,
     "epochs": 400,
     "phase1_epochs": 30,
@@ -78,11 +78,15 @@ def main():
             loss_u = F.mse_loss(u_pred, u_gt)
 
             if calc_phys:
-                # 1. 누락된 PDE Loss 계산 함수 호출!
                 loss_phys = compute_static_pde_loss(pos_raw, u_pred, mu_pred)
                 
                 std_mu = torch.std(mu_pred, dim=1).mean()
-                loss_var = -0.1 * std_mu  # -0.1은 상황에 따라 -0.5나 -1.0으로 키우셔도 됩니다.
+                
+                # [핵심 수정] Hinge Loss 도입 (통곡의 벽)
+                target_std = 0.4  # Mu의 최소 보장 표준편차 (이 값이 클수록 강제로 더 찢어놓음)
+                
+                # std_mu가 target_std(0.4)보다 작아지면 페널티 폭발, 크면 페널티 0
+                loss_var = F.relu(target_std - std_mu) * 10.0 # 10.0은 무조건 PDE 로스를 이길 만큼의 강력한 철퇴
     
                 total_loss = loss_u + (physics_weight * loss_phys) + loss_var
             else:
@@ -121,7 +125,7 @@ def main():
             print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | U_MSE: {avg_u:.4e}")
 
         if epoch % CONFIG["save_interval"] == 0 or epoch == CONFIG["epochs"] - 1:
-            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v21_{epoch:03d}.pth")
+            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v22_{epoch:03d}.pth")
             
             # 저장할 데이터 구성
             save_dict = {
