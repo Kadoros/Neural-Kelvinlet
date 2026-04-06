@@ -12,7 +12,7 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v22",
+    "log_dir": "runs/linear_v23",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
     "lr_mu": 1e-5,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
@@ -125,7 +125,7 @@ def main():
             print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | U_MSE: {avg_u:.4e}")
 
         if epoch % CONFIG["save_interval"] == 0 or epoch == CONFIG["epochs"] - 1:
-            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v22_{epoch:03d}.pth")
+            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v23_{epoch:03d}.pth")
             
             # 저장할 데이터 구성
             save_dict = {
