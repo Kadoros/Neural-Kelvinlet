@@ -88,6 +88,6 @@ class HyperPINO(nn.Module):
         mu_raw = self.mu_layers[-1](x_mu, params_mu_all[:, mu_offsets[-2]:mu_offsets[-1]])
         
         
-       mu_pred = 0.3 + torch.sigmoid(mu_raw) * 1.5
+        mu_pred = 0.3 + torch.sigmoid(mu_raw) 
         
         return u_pred, mu_pred

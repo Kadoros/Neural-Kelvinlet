@@ -12,7 +12,7 @@ from utils import log_3d_vis_to_tensorboard
 
 CONFIG = {
     "dataset_path": "data/individual_graspers_linear.pt",
-    "log_dir": "runs/linear_v23",
+    "log_dir": "runs/linear_v25",
     "checkpoint_dir": "checkpoints",
     "lr_u": 5e-4,
     "lr_mu": 1e-5,  # 에너지 방식은 안정적이므로 mu 학습률을 조금 높임
@@ -82,17 +82,12 @@ def main():
                 
                 # 1. 평균을 1.0 근처로 유지하도록 유도 (Soft Penalty)
                 mean_mu = torch.mean(mu_pred)
-                loss_mean = F.mse_loss(mean_mu, torch.tensor(1.0).to(device)) * 5.0
+                loss_mean = F.mse_loss(mean_mu, torch.tensor(1.0).to(device)) * 1.0
                 
-                # 2. 분산 확보 (Hinge Loss 완화)
-                std_mu = torch.std(mu_pred, dim=1).mean()
-                target_std = 0.2  # 처음부터 0.4로 찢지 말고 타겟을 조금 낮춥니다.
-                
-                # 가중치를 10.0에서 1.0 정도로 낮추거나, progress에 비례하게 만듭니다.
-                loss_var = F.relu(target_std - std_mu) * 1.0 * progress 
+            
     
                 # 최종 Loss 조합
-                total_loss = loss_u + (physics_weight * loss_phys) + loss_var + loss_mean
+                total_loss = loss_u + (physics_weight * loss_phys) + loss_mean
             else:
                 loss_phys = torch.tensor(0.0).to(device)
                 total_loss = loss_u + (physics_weight * loss_phys)
@@ -129,7 +124,7 @@ def main():
             print(f"Epoch [{epoch:03d}] {phase_name} | Mu: {mu_pred.mean().item():.4f} | U_MSE: {avg_u:.4e}")
 
         if epoch % CONFIG["save_interval"] == 0 or epoch == CONFIG["epochs"] - 1:
-            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v23_{epoch:03d}.pth")
+            checkpoint_path = os.path.join(CONFIG["checkpoint_dir"], f"model_epoch_v25_{epoch:03d}.pth")
             
             # 저장할 데이터 구성
             save_dict = {
